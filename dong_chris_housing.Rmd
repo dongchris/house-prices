@@ -1,0 +1,49 @@
+---
+title: "dong_chris_housing"
+author: "Chris Dong"
+date: "September 20, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Loading the data and any packages
+```{r, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(magrittr)
+house <- read_csv("housing.txt")
+names(house) <- tolower(names(house))
+```
+
+`MSSubClass`: Identifies the type of dwelling involved in the sale.	This should be a factor
+```{r}
+uniqMSSubClass <- house %>% select(2) %>% distinct() %>% unlist() %>% sort()
+house$mssubclass <- factor(house$mssubclass, 
+  levels = uniqMSSubClass,
+  labels = c('1-STORY 1946 & NEWER ALL STYLES', '1-STORY 1945 & OLDER',
+  '1-STORY W/FINISHED ATTIC ALL AGES', '1-1/2 STORY - UNFINISHED ALL AGES',
+  '1-1/2 STORY FINISHED ALL AGES', '2-STORY 1946 & NEWER',
+  '2-STORY 1945 & OLDER', '2-1/2 STORY ALL AGES', 'SPLIT OR MULTI-LEVEL',
+  'SPLIT FOYER', 'DUPLEX - ALL STYLES AND AGES',
+  '1-STORY PUD (Planned Unit Development) - 1946 & NEWER',
+  '2-STORY PUD - 1946 & NEWER',
+  'PUD - MULTILEVEL - INCL SPLIT LEV/FOYER',
+  '2 FAMILY CONVERSION - ALL STYLES AND AGES'))
+```
+
+```{r}
+table(house$mszoning)
+hist(log(house$lotfrontage))
+hist(log(house$lotarea))
+table(house$street)
+table(house$alley)
+table(house$lotshape)
+house$lotshape <- factor(house$lotshape)
+house$lotshape <- relevel(house$lotshape, ref = "Reg")
+
+summary(lm(saleprice ~ lotshape, data = house))
+```
+
+

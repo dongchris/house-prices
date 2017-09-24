@@ -1,0 +1,28 @@
+---
+title: "MSAN601 Housing Project"
+author: "Chris Dong, Jing Song, Qian Li, Yimei Chen"
+date: "September 20, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Loading Libaries and Data
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(magrittr)
+house <- read_csv("housing.txt")
+names(house) <- tolower(names(house))
+```
+
+Split into Training and Testing (80-20)
+```{r}
+set.seed(888)
+index <- sample(nrow(house), nrow(house) * .80)
+train <- house[index,]
+test <- house[-index,]
+```
+
+
