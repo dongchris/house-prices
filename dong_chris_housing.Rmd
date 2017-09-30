@@ -13,37 +13,229 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r, warning = FALSE, message = FALSE}
 library(tidyverse)
 library(magrittr)
+library(leaps)
 house <- read_csv("housing.txt")
+
+
+
 names(house) <- tolower(names(house))
+house$mssubclass <- factor(house$mssubclass)
+house$masvnrarea <- as.numeric(house$masvnrarea)
+house$masvnrarea[which(is.na(house$masvnrarea))] <- 0
+house$garageyrblt <- 2017 - as.numeric(house$garageyrblt)
+house$garageyrblt[is.na(house$garageyrblt)] <- 0
 ```
 
-`MSSubClass`: Identifies the type of dwelling involved in the sale.	This should be a factor
-```{r}
-uniqMSSubClass <- house %>% select(2) %>% distinct() %>% unlist() %>% sort()
-house$mssubclass <- factor(house$mssubclass, 
-  levels = uniqMSSubClass,
-  labels = c('1-STORY 1946 & NEWER ALL STYLES', '1-STORY 1945 & OLDER',
-  '1-STORY W/FINISHED ATTIC ALL AGES', '1-1/2 STORY - UNFINISHED ALL AGES',
-  '1-1/2 STORY FINISHED ALL AGES', '2-STORY 1946 & NEWER',
-  '2-STORY 1945 & OLDER', '2-1/2 STORY ALL AGES', 'SPLIT OR MULTI-LEVEL',
-  'SPLIT FOYER', 'DUPLEX - ALL STYLES AND AGES',
-  '1-STORY PUD (Planned Unit Development) - 1946 & NEWER',
-  '2-STORY PUD - 1946 & NEWER',
-  'PUD - MULTILEVEL - INCL SPLIT LEV/FOYER',
-  '2 FAMILY CONVERSION - ALL STYLES AND AGES'))
+Impute the NA in `lotfrontage` with K-Nearest Neighbors
+```{r,warning = FALSE, message = FALSE}
+
+#install.packages('VIM')
+library(VIM)
+
+k = round(sqrt(1460*.8) / 2)
+
+newlotfrontage <- kNN(house, variable = "lotfrontage",  k = k)$lotfrontage
+
+house$lotfrontage <- newlotfrontage
+
+
+house[is.na(house)] <- "None"
+
+```
+
+
+Split the data into either numeric or categorical. When doing a linear model on only numerical variables, we find that two variables, `totalbsmtsf` and `grlivarea` are perfectly collinear with other variables so we remove them. If VIF is higher than 2, there is some collinearity problem.
+```{r, warning = F}
+
+#install.packages("fmsb")
+library(car)
+
+house$remodel <- T
+house[house$yearbuilt == house$yearremodadd,]$remodel <- F
+
+house$totalgarage <- house$garagearea + house$garagecars
+house$totalfloorsf <- house$`1stflrsf` + house$`2ndflrsf` + house$totalgarage
+
+house$porcharea <- with(house, openporchsf + enclosedporch +
+    `3ssnporch` + screenporch)
+
+house <- house %>% select(-totalbsmtsf, -grlivarea, -yearremodadd, 
+    -garagearea, -garagecars, -`1stflrsf`, -`2ndflrsf`, -totalgarage,
+    -yearbuilt, -openporchsf, -enclosedporch, - `3ssnporch`, - screenporch)
+
+
+
+house_numeric <- house[,sapply(house,function(x) is.numeric(x))]
+nummodel <- lm(saleprice~., data = house_numeric)
+vif(nummodel)
+
+
+summary(nummodel)
+
+cor_matrix <- cor(house_numeric) 
+
+house_category <- house[,!sapply(house,function(x) is.numeric(x))]
+
+
+summary(nummodel)
+
+
+fullmodel <- lm(saleprice~.,data = house)
+summary(fullmodel)
+
+
+
 ```
 
 ```{r}
-table(house$mszoning)
-hist(log(house$lotfrontage))
-hist(log(house$lotarea))
-table(house$street)
-table(house$alley)
-table(house$lotshape)
-house$lotshape <- factor(house$lotshape)
-house$lotshape <- relevel(house$lotshape, ref = "Reg")
+tablecat <- sapply(house_category, function(x) sort(table(x), decreasing = T))
+head(tablecat)
+```
 
-summary(lm(saleprice ~ lotshape, data = house))
+
+
+LASSO
+```{r}
+library(glmnet)
+lassorefactor <- function(){
+
+x <- model.matrix(saleprice ~ ., data = house)[,-1]
+y <- house$saleprice
+train <- sample(1:nrow(x), nrow(x) / 2)
+test <- (-train)
+y.train <- y[train]
+y.test <- y[test]
+grid.lambda <- 10^seq(10, -2, length = 100)
+lasso.model <- glmnet(x, y, alpha = 1, lambda = grid.lambda)
+set.seed(1)
+cv.out <- cv.glmnet(x[train,], y.train, alpha = 1)
+best.lambda <- cv.out$lambda.min
+lasso.pred <- predict(lasso.model, s = best.lambda, newx = x[test,])
+mspe.lasso <- mean((lasso.pred - y.test)^2)
+final.model <- glmnet(x, y, alpha = 1, lambda = best.lambda)
+c <- coef(final.model)
+ind <- which(c==0)
+variables <- row.names(c)[ind]
+return(variables)
+}
+
+useless <- lassorefactor()
+
+```
+
+```{r}
+head(tablecat,n=10)
+tablecat$lotshape
+head(useless,n=35)
+```
+
+According to LASSO, only category 20 for `mssubclass` is useful so I will turn it into a boolean. For `mszoning` only RL and RM should be kept.
+
+```{r}
+house$mssubclass <- as.character(house$mssubclass)
+house[house$mssubclass!="20",]$mssubclass <- "not20"
+
+house[house$mszoning!="RL" & house$mszoning!="RM",]$mszoning <- "Other"
+
+names(house)
+
+fullmodel <- lm(saleprice~.,data = house)
+
+summary(fullmodel)
+
+house2 <- house %>% select(-lotfrontage)
+
+fullmodel <- lm(saleprice~.,data = house)
+summary(fullmodel)$r.squared
+  
+```
+
+
+```{r}
+catmodel <- lm(house$saleprice~., data = house_category)
+summary(catmodel)
+```
+
+
+```{r}
+library(leaps)
+#subsetmodel <- regsubsets(house$saleprice~., data = house_category,
+#                          method = "exhaustive", really.big = T)
+```
+
+```{r}
+house_category %>% sapply(function(x) sort(table(x), decreasing = T))
+
+library(forcats)
+
+
+```
+
+
+Split into Training and Testing (80-20)
+```{r}
+set.seed(888)
+index <- sample(nrow(house), nrow(house) * .80)
+
+train <- house[index,]
+test <- house[-index,]
+```
+
+```{r}
+
+```
+
+
+Lasso
+```{r, warning = F, message = F}
+library(glmnet)
+
+lassodelete <- function(){
+x <- model.matrix(saleprice ~ ., data = house)[,-1]
+y <- house$saleprice
+train <- sample(1:nrow(x), nrow(x) / 2)
+test <- (-train)
+y.train <- y[train]
+y.test <- y[test]
+grid.lambda <- 10^seq(10, -2, length = 100)
+lasso.model <- glmnet(x, y, alpha = 1, lambda = grid.lambda)
+set.seed(1)
+cv.out <- cv.glmnet(x[train,], y.train, alpha = 1)
+best.lambda <- cv.out$lambda.min
+lasso.pred <- predict(lasso.model, s = best.lambda, newx = x[test,])
+mspe.lasso <- mean((lasso.pred - y.test)^2)
+final.model <- glmnet(x, y, alpha = 1, lambda = best.lambda)
+c <- coef(final.model)
+ind <- which(c==0)
+variables <- row.names(c)[ind]
+variables
+delete <- names(house) %in% variables
+house <<- house[,-delete]
+
+}
+
+lassodelete()
+
+while(ncol(house)>=60){
+lassodelete()
+}
+
+summary(lm(saleprice~.,data=house))
+
+
+
+set.seed(1)
+index <- sample(nrow(house), nrow(house) * .80)
+train <- house[index,]
+test <- house[-index,]
+model <- lm(saleprice~.,data=train)
+summary(model)
+
+predict(model, test)
+```
+
+```{r}
+
 ```
 
 

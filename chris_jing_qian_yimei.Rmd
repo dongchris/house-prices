@@ -17,6 +17,25 @@ house <- read_csv("housing.txt")
 names(house) <- tolower(names(house))
 ```
 
+
+Using K nearest neighbors algorithm for imputation 
+$k = \frac{\sqrt{N}}{2}$ where N is the number of samples in `train`.
+```{r}
+sapply(house, function(x) sum(is.na(x)))
+
+house <- house[,sapply(house, function(x) sum(is.na(x))) < nrow(house)/2]
+
+#install.packages('VIM')
+library(VIM)
+
+k = round(sqrt(1460*.8) / 2)
+
+house <- kNN(house, k = k)
+house <- house[,1:77]
+
+sapply(test, function(x) sum(is.na(x)))
+```
+
 Split into Training and Testing (80-20)
 ```{r}
 set.seed(888)
