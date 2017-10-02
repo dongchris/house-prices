@@ -11,22 +11,29 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Loading the data and any packages
 ```{r, warning = FALSE, message = FALSE}
+options("max.print"=5)
 library(tidyverse)
 library(magrittr)
 library(leaps)
 house <- read_csv("housing.txt")
-
-
-
 names(house) <- tolower(names(house))
 house$mssubclass <- factor(house$mssubclass)
+
+
+house %>% sapply(function(x) sum(is.na(x))) %>% sort(decreasing = T)
+
+house$bsmtfintype1[which(is.na(house$bsmtfintype1))] <- 0
+house$bsmtfintype2[which(is.na(house$bsmtfintype2))] <- 0
 house$masvnrarea <- as.numeric(house$masvnrarea)
 house$masvnrarea[which(is.na(house$masvnrarea))] <- 0
-house$garageyrblt <- 2017 - as.numeric(house$garageyrblt)
+
+house$garageyrblt <- (house$garageyrblt > house$yearbuilt) * 1
 house$garageyrblt[is.na(house$garageyrblt)] <- 0
+
+
 ```
 
-Impute the NA in `lotfrontage` with K-Nearest Neighbors
+Impute the NA in `lotfrontage`, `electrical`  with K-Nearest Neighbors
 ```{r,warning = FALSE, message = FALSE}
 
 #install.packages('VIM')
@@ -34,10 +41,8 @@ library(VIM)
 
 k = round(sqrt(1460*.8) / 2)
 
-newlotfrontage <- kNN(house, variable = "lotfrontage",  k = k)$lotfrontage
-
-house$lotfrontage <- newlotfrontage
-
+house$lotfrontage <- kNN(house, variable = "lotfrontage",  k = k)$lotfrontage
+house$electrical <- kNN(house, variable = "electrical",  k = k)$electrical
 
 house[is.na(house)] <- "None"
 
@@ -52,190 +57,444 @@ library(car)
 
 house$remodel <- T
 house[house$yearbuilt == house$yearremodadd,]$remodel <- F
+house %<>% select(-yearremodadd) 
 
-house$totalgarage <- house$garagearea + house$garagecars
-house$totalfloorsf <- house$`1stflrsf` + house$`2ndflrsf` + house$totalgarage
+house$soldminusbuilt <- (house$yrsold - house$yearbuilt)
+house %<>% select(-yrsold,-yearbuilt) 
+
 
 house$porcharea <- with(house, openporchsf + enclosedporch +
     `3ssnporch` + screenporch)
 
-house <- house %>% select(-totalbsmtsf, -grlivarea, -yearremodadd, 
-    -garagearea, -garagecars, -`1stflrsf`, -`2ndflrsf`, -totalgarage,
-    -yearbuilt, -openporchsf, -enclosedporch, - `3ssnporch`, - screenporch)
+
+house %<>% select(-id) 
 
 
+
+house$lotshape <- (house$lotshape == 'Reg') *1
+
+house_by_neighborhood <- house %>% group_by(neighborhood) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+house_by_neighborhood
+
+library(Hmisc)
+
+house_by_neighborhood$pricecategory <- as.numeric(factor(cut2(house_by_neighborhood$avgprc, quantile(house_by_neighborhood$avgprc)),
+       labels = 1:4))
+
+house_by_neighborhood <- house_by_neighborhood[,-2]
+
+house %<>% left_join(house_by_neighborhood, by = "neighborhood") %>% select(-neighborhood)
+
+hist(house$mosold, bins=12)
+
+house$summertime <- (house$mosold %in% 4:7) * 1
+
+house %<>% select(-mosold, -landcontour, -alley)
+house %<>% select(-lotshape)
+```
+
+```{r}
+house$lotconfig <- (house$lotconfig == "Inside")  * 1
+
+house %<>% select(-lotconfig)
+
+fullmodel <- lm(saleprice~sqrt(lotfrontage)+porcharea+.,data = house)
+summary(fullmodel)
+
+house$condition1 <- relevel(factor(house$condition1), ref = "Norm")
+
+house$condition2 <- relevel(factor(house$condition2), ref = "Norm")
+
+house %<>% select(-roofstyle)
+house %<>% select(-exterior2nd)
+
+
+
+table(house$bldgtype)
+
+house %>% group_by(housestyle) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+summary(lm(saleprice~housestyle,data=house))
+
+
+house <- house %>% select(-`1stflrsf`, -`2ndflrsf`, -lowqualfinsf,
+    -totalbsmtsf, -openporchsf, -enclosedporch, - `3ssnporch`,
+    - screenporch, -garagearea)
+
+fullmodel <- lm(saleprice~sqrt(lotfrontage)+.,data = house)
+summary(fullmodel)
+
+house %>% group_by(salecondition) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+house$salecondition <- (house$salecondition == "Normal") * 1 
+
+house %>% group_by(saletype) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+
+house$newtype <- (house$saletype == 'New') * 1
+
+house <- house %>% select(-saletype)
+
+house$miscfeature <- (house$miscfeature != 'None') * 1
+house %<>% select(-miscval)
+house %<>% select(-miscfeature) 
+
+house$paveddrive <- (house$paveddrive == 'Y') * 1
+house %<>% select(-paveddrive) 
+
+
+house$poolqc <- (house$poolqc !="None")*1
+house$fence <- (house$fence !="None")*1
+
+house$garagecond <-  as.numeric(factor(house$garagecond, 
+    levels = c("None","Po","Fa","TA","Gd","Ex"), labels = 0:5))
+house$garagequal <-  as.numeric(factor(house$garagequal, 
+    levels = c("None","Po","Fa","TA","Gd","Ex"), labels = 0:5))
+
+glimpse(house)
+
+house %<>% select(-fence,-poolqc,-garagecond)
+
+
+
+
+house %>% group_by(garagefinish) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+house$garagefinish <-(house$garagefinish == "Fin") *1
+house %<>% select(-garagefinish)
+
+
+
+
+
+```
+
+```{r}
+#!diagnosticsoff
+house %<>% select(-garageyrblt)
+
+house$garagetype <- relevel(factor(house$garagetype), ref = "None")
+
+
+
+house$fireplacequ <-  as.numeric(factor(house$fireplacequ,
+    levels = c("None","Po","Fa","TA","Gd","Ex"), labels = 0:5))
+cor(house$saleprice,house$fireplacequ); cor(house$saleprice,house$fireplaces)
+
+house %<>% select(-fireplacequ, -fireplaces)
+
+house$functional <- (house$functional == "Typ") * 1
+
+house$kitchenqual <-  as.numeric(factor(house$kitchenqual,
+    levels = c("Po","Fa","TA","Gd","Ex"), labels = 1:5))
+
+cor(house$totrmsabvgrd ,house$saleprice);cor(house$grlivarea ,house$saleprice)
+house %<>% select(-totrmsabvgrd)
+
+fullmodel <- lm(saleprice~sqrt(lotfrontage)+.,data = house)
+summary(fullmodel)
+
+table(house$fullbath)
+
+house$bath <- house$fullbath + house$halfbath + house$bsmtfullbath + house$bsmthalfbath
+house %<>% select(-fullbath,-halfbath, -bsmthalfbath, -bsmtfullbath)
+
+house %<>% select(-bath)
+```
+
+```{r}
+house %>% group_by(electrical) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+house$electrical <- (house$electrical == "SBrkr") * 1
+
+house %<>% select(-electrical, -centralair)
+
+house$heatingqc <- as.numeric(factor(house$heatingqc,
+                  levels = c("Po","Fa","TA","Gd","Ex"), labels = 1:5))
+
+table(house$heatingqc)
+
+house$heatingqc <- (house$heatingqc == 5) * 1
+
+house %<>% select(-heating)
+
+table(house$bsmtfintype1)
+
+house$bsmtfintype1 <- as.numeric(factor(house$bsmtfintype1,
+      levels = c("0","Unf","LwQ","Rec","BLQ","ALQ","GLQ"),
+      labels = 0:6))
+house$bsmtfintype2 <- as.numeric(factor(house$bsmtfintype2,
+      levels = c("0","Unf","LwQ","Rec","BLQ","ALQ","GLQ"),
+      labels = 0:6))
+house$bsmtfintype1 <- house$bsmtfintype1 + house$bsmtfintype2
+house %<>% select(-bsmtfintype1, -bsmtfintype2)
+
+house$bsmtexposure <- relevel(factor(house$bsmtexposure), ref = "None")
+
+table(house$bsmtexposure)
+
+house %>% group_by(bsmtexposure) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+house$bsmtexposure <- (house$bsmtexposure == "Gd") * 1
+
+house %>% group_by(bsmtcond) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+table(house$bsmtcond)
+
+house$bsmtcond <- as.numeric(factor(house$bsmtcond,
+      levels = c("None","Po","Fa","TA","Gd","Ex"),
+      labels = 0:5))
+
+house$bsmtqual <- as.numeric(factor(house$bsmtqual,
+      levels = c("None","Po","Fa","TA","Gd","Ex"),
+      labels = 0:5))
+cor(house$bsmtcond,house$bsmtqual)
+cor(house$bsmtcond,house$saleprice);cor(house$bsmtqual,house$saleprice)
+house %<>% select(-bsmtcond)
+
+house %<>% select(-bsmtqual)
+
+table(house$foundation)
+
+house %>% group_by(foundation) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+house$foundation <- (house$foundation == "PConc")*1
+
+
+
+house$extercond <- as.numeric(factor(house$extercond,
+      levels = c("Po","Fa","TA","Gd","Ex"),
+      labels = 1:5))
+house$exterqual <- as.numeric(factor(house$exterqual,
+      levels = c("Po","Fa","TA","Gd","Ex"),
+      labels = 1:5))
+cor(house$extercond,house$exterqual)
+
+house$masvnrtype <- relevel(factor(house$masvnrtype), ref = "None")
+
+table(house$masvnrtype)
+
+house$masvnrtype <- (house$masvnrtype != "None") * 1
+
+house_by_exterior <- house %>%  group_by(exterior1st) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+
+house_by_exterior$exteriorcategory <- as.numeric(factor(cut2(house_by_exterior$avgprc, quantile(house_by_exterior$avgprc)),
+       labels = 1:4))
+
+house_by_exterior <- house_by_exterior[,-2]
+
+house %<>% left_join(house_by_exterior, by = "exterior1st") %>% select(-exterior1st)
+
+house %<>% select(-exteriorcategory)
+
+
+table(house$housestyle)
+
+house %>%  group_by(housestyle) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+house$housestyle <- (house$housestyle == "2Story" | house$housestyle == "2.5Fin")*1
+
+
+table(house$bldgtype)
+
+house %>%  group_by(bldgtype) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+house$bldgtype <- (house$bldgtype == "1Fam" | house$bldgtype == "2FmCon") * 1
+house %<>% select(-bldgtype)
+
+table(house$landslope)
+
+house$landslope <- (house$landslope == "Gtl") * 1
+house %<>% select(-landslope)
+
+table(house$utilities)
+house %<>% select(-utilities, -street)
+
+house %>%  group_by(mszoning) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+table(house$mszoning)
+
+house$mszoning <- relevel(factor(house$mszoning), ref = "RL")
+
+house %<>% select(-mszoning)
+
+house %>%  group_by(mssubclass) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+house %<>% select(-mssubclass, -lotfrontage, -porcharea, -extercond,-foundation)
+
+
+house %>%  group_by(condition1) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+
+house$condition1 <- (house$condition1 == "Artery" | house$condition1 =="Feedr"|
+  house$condition1 == "RRAe")*1
+house$condition2 <- (house$condition2 == "PosN") * 1
+
+cor(house$garagequal, house$garagecars)
+
+house %<>% select(-garagequal)
+
+fullmodel <- lm(saleprice~.,data = house)
+summary(fullmodel)
+```
+
+Checking multicollinearity. Looks good. For the generalized variance inflation factor (normalized by the degree of freedom), everything except one is less than 2. 
+```{r}
+vif(fullmodel)
+```
+
+
+```{r, fig.width = 12, fig.height = 11}
+house$remodel <- as.numeric(house$remodel)
 
 house_numeric <- house[,sapply(house,function(x) is.numeric(x))]
-nummodel <- lm(saleprice~., data = house_numeric)
-vif(nummodel)
 
+house_numeric %<>% select(saleprice, everything())
+#install.packages("ggcorrplot")
 
-summary(nummodel)
+library(ggcorrplot)
 
 cor_matrix <- cor(house_numeric) 
 
-house_category <- house[,!sapply(house,function(x) is.numeric(x))]
-
-
-summary(nummodel)
-
-
-fullmodel <- lm(saleprice~.,data = house)
-summary(fullmodel)
+ggcorrplot(cor_matrix, type = "lower", outline.col = "white",
+           lab = T, insig = "blank")
 
 
 
+```
+
+Interestingly, `soldminusbuilt` which is `yrsold` - `yearbuilt` becomes insignificant in this smaller model with only the best predictors
+```{r}
+bestpredictors <- names(house_numeric)[sapply(house_numeric, function(x) abs(cor(house_numeric$saleprice, x))) >= 0.5][-1]
+
+bestpredictors <- bestpredictors[-6]
+
+bestmodel <- lm(saleprice~overallqual + exterqual + grlivarea + kitchenqual +
+     garagecars + pricecategory, data = house)
+
+summary(bestmodel)
+```
+
+Subset with only best predictors
+```{r}
+housesubset <- house %>% select(bestpredictors)
+```
+
+So, 6 variables capture $78\%$ of the variation in sale price for our model.
+
+Checking assumptions.
+
+```{r}
+cor(housesubset)
+vif(bestmodel)
+qqnorm(housesubset$overallqual)
+qqline(housesubset$overallqual)
+
+qqnorm(housesubset$exterqual)
+qqline(housesubset$exterqual)
+
+qqnorm(housesubset$grlivarea)
+qqline(housesubset$grlivarea)
+
+
+qqnorm(log(housesubset$grlivarea))
+qqline(log(housesubset$grlivarea))
+
+qqnorm(housesubset$garagecars)
+qqline(housesubset$garagecars)
+
+qqnorm(housesubset$pricecategory)
+qqline(housesubset$pricecategory)
+
+qqnorm(house$saleprice)
+qqline(house$saleprice)
+
+qqnorm(log(house$saleprice))
+qqline(log(house$saleprice))
 ```
 
 ```{r}
-tablecat <- sapply(house_category, function(x) sort(table(x), decreasing = T))
-head(tablecat)
+bestmodel2 <- lm(log(saleprice)~overallqual  + exterqual +  log(grlivarea) + 
+    kitchenqual + garagecars + pricecategory, data = house)
+
+summary(bestmodel2)
 ```
 
-
-
-LASSO
+`exterqual` becomes insignificant once we take the log of the response variable
 ```{r}
-library(glmnet)
-lassorefactor <- function(){
-
-x <- model.matrix(saleprice ~ ., data = house)[,-1]
-y <- house$saleprice
-train <- sample(1:nrow(x), nrow(x) / 2)
-test <- (-train)
-y.train <- y[train]
-y.test <- y[test]
-grid.lambda <- 10^seq(10, -2, length = 100)
-lasso.model <- glmnet(x, y, alpha = 1, lambda = grid.lambda)
-set.seed(1)
-cv.out <- cv.glmnet(x[train,], y.train, alpha = 1)
-best.lambda <- cv.out$lambda.min
-lasso.pred <- predict(lasso.model, s = best.lambda, newx = x[test,])
-mspe.lasso <- mean((lasso.pred - y.test)^2)
-final.model <- glmnet(x, y, alpha = 1, lambda = best.lambda)
-c <- coef(final.model)
-ind <- which(c==0)
-variables <- row.names(c)[ind]
-return(variables)
-}
-
-useless <- lassorefactor()
+bestmodel3 <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
+    kitchenqual + garagecars + pricecategory, data = house)
+summary(bestmodel3)
 
 ```
+
+Check for influence points
+```{r}
+infm <- influence.measures(bestmodel3)
+which(apply(infm$is.inf,1,any)) #influential observations
+summary(infm)
+plot(rstudent(bestmodel3) ~ hatvalues(bestmodel3))
+#install.packages("olsrr")
+```
+```{r}
+library(olsrr)
+threshold <- 2*sqrt(5/1460)
+ols_dffits_plot(bestmodel3)
+
+help("ols_dffits_plot")
+```
+
+Let's examine Observation # 1299, and 524
 
 ```{r}
-head(tablecat,n=10)
-tablecat$lotshape
-head(useless,n=35)
+house[1299,] %>% View()
+house[542,] %>% View()
+
+bestmodel4 <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
+    kitchenqual + garagecars + pricecategory, data = house[c(-1299,-542),])
+summary(bestmodel4)
+
 ```
 
-According to LASSO, only category 20 for `mssubclass` is useful so I will turn it into a boolean. For `mszoning` only RL and RM should be kept.
+By just removing two points, our Adjusted R-squared went from `r summary(bestmodel3)$adj.r.squared` to `r summary(bestmodel4)$adj.r.squared`
 
+Let's see what happens if we simply remove the observations.
 ```{r}
-house$mssubclass <- as.character(house$mssubclass)
-house[house$mssubclass!="20",]$mssubclass <- "not20"
+influence <- ols_dffits_plot(bestmodel3)
+influenceindex <- unlist(influence$outliers[1])
 
-house[house$mszoning!="RL" & house$mszoning!="RM",]$mszoning <- "Other"
+bestmodelnoinfluence <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
+    kitchenqual + garagecars + pricecategory, data = house[-influenceindex,])
+summary(bestmodelnoinfluence)
 
-names(house)
-
-fullmodel <- lm(saleprice~.,data = house)
-
-summary(fullmodel)
-
-house2 <- house %>% select(-lotfrontage)
-
-fullmodel <- lm(saleprice~.,data = house)
-summary(fullmodel)$r.squared
-  
 ```
+
+We see that our Adjusted R-squared went from `r summary(bestmodel4)$adj.r.squared` to 
+`r summary(bestmodelnoinfluence)$adj.r.squared` after removing ALL the influence points.
 
 
 ```{r}
-catmodel <- lm(house$saleprice~., data = house_category)
-summary(catmodel)
+#house[influenceindex, ]$saleprice <- NA
+#kNN(house, variable = "saleprice",  k = k)$saleprice
 ```
 
 
-```{r}
-library(leaps)
-#subsetmodel <- regsubsets(house$saleprice~., data = house_category,
-#                          method = "exhaustive", really.big = T)
-```
+Check MSPE
 
-```{r}
-house_category %>% sapply(function(x) sort(table(x), decreasing = T))
-
-library(forcats)
-
-
-```
-
-
-Split into Training and Testing (80-20)
 ```{r}
 set.seed(888)
-index <- sample(nrow(house), nrow(house) * .80)
-
-train <- house[index,]
-test <- house[-index,]
-```
-
-```{r}
-
-```
-
-
-Lasso
-```{r, warning = F, message = F}
-library(glmnet)
-
-lassodelete <- function(){
-x <- model.matrix(saleprice ~ ., data = house)[,-1]
-y <- house$saleprice
-train <- sample(1:nrow(x), nrow(x) / 2)
+train <- sample(nrow(house), nrow(house) * .8)
 test <- (-train)
-y.train <- y[train]
-y.test <- y[test]
-grid.lambda <- 10^seq(10, -2, length = 100)
-lasso.model <- glmnet(x, y, alpha = 1, lambda = grid.lambda)
-set.seed(1)
-cv.out <- cv.glmnet(x[train,], y.train, alpha = 1)
-best.lambda <- cv.out$lambda.min
-lasso.pred <- predict(lasso.model, s = best.lambda, newx = x[test,])
-mspe.lasso <- mean((lasso.pred - y.test)^2)
-final.model <- glmnet(x, y, alpha = 1, lambda = best.lambda)
-c <- coef(final.model)
-ind <- which(c==0)
-variables <- row.names(c)[ind]
-variables
-delete <- names(house) %in% variables
-house <<- house[,-delete]
 
-}
+trainhouse <- house[train,]
+testhouse <- house[test,]
 
-lassodelete()
-
-while(ncol(house)>=60){
-lassodelete()
-}
-
-summary(lm(saleprice~.,data=house))
-
-
-
-set.seed(1)
-index <- sample(nrow(house), nrow(house) * .80)
-train <- house[index,]
-test <- house[-index,]
-model <- lm(saleprice~.,data=train)
-summary(model)
-
-predict(model, test)
+trainmodel <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
+    kitchenqual + garagecars + pricecategory, data = trainhouse)
+exp(predict(trainmodel, testhouse)) - testhouse$saleprice
 ```
 
-```{r}
 
-```
+
 
 
