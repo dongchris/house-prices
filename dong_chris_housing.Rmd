@@ -476,8 +476,14 @@ We see that our Adjusted R-squared went from `r summary(bestmodel4)$adj.r.square
 
 
 ```{r}
-#house[influenceindex, ]$saleprice <- NA
-#kNN(house, variable = "saleprice",  k = k)$saleprice
+house[influenceindex, ]$saleprice <- NA
+house$saleprice <- kNN(house, variable = "saleprice",  k = k)$saleprice
+```
+
+```{r}
+bestmodelimputeinfluence <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
+    kitchenqual + garagecars + pricecategory, data = house)
+summary(bestmodelimputeinfluence)
 ```
 
 
