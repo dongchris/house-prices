@@ -490,9 +490,8 @@ house4 <- house3 %>% select(-exterqual)
 I test the multicollinearity, significance of variables in the model, normality for our final model.
 ```{r}
 endmodel <- lm(log(saleprice) ~ log(lotarea) + 
-              sqrt(bsmtfinsf1)+log(grlivarea) + 
-                sqrt(soldminusbuilt)+ . -
-                lotarea - bsmtfinsf1 - grlivarea - soldminusbuilt,
+              sqrt(bsmtfinsf1)+log(grlivarea) +  . -
+                lotarea - bsmtfinsf1 - grlivarea,
               data = house4[-influenceindex,])
 vif(endmodel)
 options(max.print=999)
