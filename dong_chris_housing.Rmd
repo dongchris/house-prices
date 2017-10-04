@@ -7,215 +7,205 @@ output:
   html_document: default
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, warning = FALSE, message = FALSE, results = 'hide'}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Loading the data and any packages
-```{r, warning = FALSE, message = FALSE}
-options("max.print"=5)
-library(tidyverse)
-library(magrittr)
-library(leaps)
-house <- read_csv("housing.txt")
+Loading the data and any packages
+```{r, }
+options("max.print"=3)
+suppressMessages(library(tidyverse))
+suppressMessages(library(magrittr))
+suppressMessages(library(leaps))
+suppressMessages(library(VIM))
+suppressMessages(library(car))
+suppressMessages(library(Hmisc))
+house <- read_csv("housing.txt", col_types = cols())
 names(house) <- tolower(names(house))
+```
+
+Convert `mssubclass` to factor and check for `NA`s
+```{r}
 house$mssubclass <- factor(house$mssubclass)
-
-
 house %>% sapply(function(x) sum(is.na(x))) %>% sort(decreasing = T)
+```
 
+Convert numeric variables that have `NA` to 0. Change `garageyrblt` to indicate whether or not the garage was built AFTER the house was built.
+```{r}
 house$bsmtfintype1[which(is.na(house$bsmtfintype1))] <- 0
 house$bsmtfintype2[which(is.na(house$bsmtfintype2))] <- 0
 house$masvnrarea <- as.numeric(house$masvnrarea)
 house$masvnrarea[which(is.na(house$masvnrarea))] <- 0
-
 house$garageyrblt <- (house$garageyrblt > house$yearbuilt) * 1
 house$garageyrblt[is.na(house$garageyrblt)] <- 0
-
-
 ```
 
 Impute the NA in `lotfrontage`, `electrical`  with K-Nearest Neighbors
 ```{r,warning = FALSE, message = FALSE}
 
-#install.packages('VIM')
-library(VIM)
-
 k = round(sqrt(1460*.8) / 2)
 
 house$lotfrontage <- kNN(house, variable = "lotfrontage",  k = k)$lotfrontage
 house$electrical <- kNN(house, variable = "electrical",  k = k)$electrical
-
-house[is.na(house)] <- "None"
-
 ```
 
+Convert all other `NA`s to "None"
+```{r}
+house[is.na(house)] <- "None"
+```
 
-Split the data into either numeric or categorical. When doing a linear model on only numerical variables, we find that two variables, `totalbsmtsf` and `grlivarea` are perfectly collinear with other variables so we remove them. If VIF is higher than 2, there is some collinearity problem.
+Make a new variable, `remodel` that indicates whether or not remodeling took place. Remove the `yearremodadd` variable because it is no longer needed. Make a new variable `soldminusbuilt` that indicates the number of years that it took for the house to get sold after getting built.
 ```{r, warning = F}
-
-#install.packages("fmsb")
-library(car)
-
 house$remodel <- T
 house[house$yearbuilt == house$yearremodadd,]$remodel <- F
 house %<>% select(-yearremodadd) 
 
 house$soldminusbuilt <- (house$yrsold - house$yearbuilt)
 house %<>% select(-yrsold,-yearbuilt) 
+```
 
-
+Combine all of the porch variables into one. Remove `id` because it is obviously not important.
+```{r}
 house$porcharea <- with(house, openporchsf + enclosedporch +
     `3ssnporch` + screenporch)
-
-
 house %<>% select(-id) 
+```
 
-
-
+Change `lotshape` to a boolean whether or not it is Regular.
+```{r}
+table(house$lotshape)
 house$lotshape <- (house$lotshape == 'Reg') *1
+```
 
-house_by_neighborhood <- house %>% group_by(neighborhood) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+Change `neighborhood` by seperating it into 10 quantiles by median `saleprice`.
+Combine the new variable `pricecategory` with the original data frame.
+```{r}
+house_by_neighborhood <- house %>% group_by(neighborhood) %>%
+summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
 
-house_by_neighborhood
+house_by_neighborhood %>% head(2)
 
-library(Hmisc)
-
-house_by_neighborhood$pricecategory <- as.numeric(factor(cut2(house_by_neighborhood$avgprc, quantile(house_by_neighborhood$avgprc)),
-       labels = 1:4))
+house_by_neighborhood$pricecategory <- as.numeric(factor(cut2(house_by_neighborhood$avgprc, quantile(house_by_neighborhood$avgprc)), labels = 1:4))
 
 house_by_neighborhood <- house_by_neighborhood[,-2]
 
-house %<>% left_join(house_by_neighborhood, by = "neighborhood") %>% select(-neighborhood)
+house %<>% left_join(house_by_neighborhood, 
+  by = "neighborhood") %>% select(-neighborhood)
+```
 
-hist(house$mosold, bins=12)
+Looking at the histogram of `mosold` we see many more houses being sold near summer time (and part of spring too) so we create a boolean. Most of the time, when we are creating a boolean, it is because it is insignificant otherwise.
+```{r}
+house %>% ggplot(aes(x=mosold)) + geom_histogram(binwidth = 1) + xlim(0,13)
+house$summertime <- (house$mosold %in% 5:7) * 1
+```
 
-house$summertime <- (house$mosold %in% 4:7) * 1
+The next part of the code was very time-consuming but here's the general outline:
+It is similar to backwards selection but by hand and possibly more thorough because of the refactoring involved rather than simply removing it. 
 
-house %<>% select(-mosold, -landcontour, -alley)
-house %<>% select(-lotshape)
+1. Check the p-value and signifiance for a particlar variable. 
+2. If the variable is numeric and significant, keep it. If the variable is categorical and all levels are significant, keep it. If only some levels are significant then try to bin the factors into smaller number of levels to try and make them statistically significant. If nothing can be done, then remove the variable.
+3. Repeat the above steps for the rest of the variables. Each time we remove a variable, we re-run the lm model to check if the Adjusted R Squared changed significantly or not.
+4. When we finish going through all the variables, there will be about 30 ones left to consider.
+
+```{r}
+house %<>% select(-mosold, -landcontour, -alley, -lotshape)
 ```
 
 ```{r}
 house$lotconfig <- (house$lotconfig == "Inside")  * 1
-
 house %<>% select(-lotconfig)
+```
 
+Here, I noticed `lotfrontage` became significant when I take the square root.
+```{r}
 fullmodel <- lm(saleprice~sqrt(lotfrontage)+porcharea+.,data = house)
-summary(fullmodel)
+summary(fullmodel)$r.squared
 
 house$condition1 <- relevel(factor(house$condition1), ref = "Norm")
-
 house$condition2 <- relevel(factor(house$condition2), ref = "Norm")
 
 house %<>% select(-roofstyle)
 house %<>% select(-exterior2nd)
 
-
-
 table(house$bldgtype)
-
-house %>% group_by(housestyle) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
-
-summary(lm(saleprice~housestyle,data=house))
-
 
 house <- house %>% select(-`1stflrsf`, -`2ndflrsf`, -lowqualfinsf,
     -totalbsmtsf, -openporchsf, -enclosedporch, - `3ssnporch`,
     - screenporch, -garagearea)
 
-fullmodel <- lm(saleprice~sqrt(lotfrontage)+.,data = house)
-summary(fullmodel)
-
 house %>% group_by(salecondition) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
-
 house$salecondition <- (house$salecondition == "Normal") * 1 
 
 house %>% group_by(saletype) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
 
-
 house$newtype <- (house$saletype == 'New') * 1
-
 house <- house %>% select(-saletype)
 
 house$miscfeature <- (house$miscfeature != 'None') * 1
-house %<>% select(-miscval)
-house %<>% select(-miscfeature) 
+house %<>% select(-miscval, -miscfeature) 
 
 house$paveddrive <- (house$paveddrive == 'Y') * 1
 house %<>% select(-paveddrive) 
 
-
 house$poolqc <- (house$poolqc !="None")*1
 house$fence <- (house$fence !="None")*1
+```
 
+Here, I am changing the ordered factor into numeric. I want to make a correlation plot with every significant variable so I am converting all variables (as long as it makes sense) to numeric.
+```{r}
 house$garagecond <-  as.numeric(factor(house$garagecond, 
     levels = c("None","Po","Fa","TA","Gd","Ex"), labels = 0:5))
 house$garagequal <-  as.numeric(factor(house$garagequal, 
     levels = c("None","Po","Fa","TA","Gd","Ex"), labels = 0:5))
 
-glimpse(house)
-
 house %<>% select(-fence,-poolqc,-garagecond)
 
-
-
-
-house %>% group_by(garagefinish) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+house %>% group_by(garagefinish) %>% 
+summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc)) %>% head(2)
 house$garagefinish <-(house$garagefinish == "Fin") *1
 house %<>% select(-garagefinish)
-
-
-
-
-
 ```
 
+Here, `fireplacequ` and `fireplaces` are obviously correlated so I choose the one that seems to explain `saleprice` better. However, they both end up being insignificant.
 ```{r}
-#!diagnosticsoff
-house %<>% select(-garageyrblt)
-
-house$garagetype <- relevel(factor(house$garagetype), ref = "None")
-
-
-
 house$fireplacequ <-  as.numeric(factor(house$fireplacequ,
     levels = c("None","Po","Fa","TA","Gd","Ex"), labels = 0:5))
 cor(house$saleprice,house$fireplacequ); cor(house$saleprice,house$fireplaces)
-
 house %<>% select(-fireplacequ, -fireplaces)
+```
+
+```{r}
+house %<>% select(-garageyrblt)
+house$garagetype <- relevel(factor(house$garagetype), ref = "None")
 
 house$functional <- (house$functional == "Typ") * 1
 
 house$kitchenqual <-  as.numeric(factor(house$kitchenqual,
     levels = c("Po","Fa","TA","Gd","Ex"), labels = 1:5))
+```
 
+Similarly, `totrmsabvgrd` is highly correlated with `grlivarea` so I keep the better of the two.
+```{r}
 cor(house$totrmsabvgrd ,house$saleprice);cor(house$grlivarea ,house$saleprice)
 house %<>% select(-totrmsabvgrd)
+```
 
-fullmodel <- lm(saleprice~sqrt(lotfrontage)+.,data = house)
-summary(fullmodel)
-
+I try to combine all of the bath variables but they end up not being significant so I just remove them.
+```{r}
 table(house$fullbath)
-
 house$bath <- house$fullbath + house$halfbath + house$bsmtfullbath + house$bsmthalfbath
 house %<>% select(-fullbath,-halfbath, -bsmthalfbath, -bsmtfullbath)
-
 house %<>% select(-bath)
 ```
 
 ```{r}
-house %>% group_by(electrical) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
-
+house %>% group_by(electrical) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc)) 
 house$electrical <- (house$electrical == "SBrkr") * 1
-
 house %<>% select(-electrical, -centralair)
 
 house$heatingqc <- as.numeric(factor(house$heatingqc,
-                  levels = c("Po","Fa","TA","Gd","Ex"), labels = 1:5))
-
+  levels = c("Po","Fa","TA","Gd","Ex"), labels = 1:5))
 table(house$heatingqc)
-
 house$heatingqc <- (house$heatingqc == 5) * 1
 
 house %<>% select(-heating)
@@ -253,7 +243,6 @@ house$bsmtqual <- as.numeric(factor(house$bsmtqual,
 cor(house$bsmtcond,house$bsmtqual)
 cor(house$bsmtcond,house$saleprice);cor(house$bsmtqual,house$saleprice)
 house %<>% select(-bsmtcond)
-
 house %<>% select(-bsmtqual)
 
 table(house$foundation)
@@ -261,8 +250,6 @@ table(house$foundation)
 house %>% group_by(foundation) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
 
 house$foundation <- (house$foundation == "PConc")*1
-
-
 
 house$extercond <- as.numeric(factor(house$extercond,
       levels = c("Po","Fa","TA","Gd","Ex"),
@@ -280,7 +267,6 @@ house$masvnrtype <- (house$masvnrtype != "None") * 1
 
 house_by_exterior <- house %>%  group_by(exterior1st) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
 
-
 house_by_exterior$exteriorcategory <- as.numeric(factor(cut2(house_by_exterior$avgprc, quantile(house_by_exterior$avgprc)),
        labels = 1:4))
 
@@ -290,13 +276,16 @@ house %<>% left_join(house_by_exterior, by = "exterior1st") %>% select(-exterior
 
 house %<>% select(-exteriorcategory)
 
+```
 
+Boolean whether or not housestyle is either `2Story` or `2.5Fin`.
+```{r}
 table(house$housestyle)
 
 house %>%  group_by(housestyle) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
 
-house$housestyle <- (house$housestyle == "2Story" | house$housestyle == "2.5Fin")*1
-
+house$housestyle <- (house$housestyle == "2Story" | 
+                    house$housestyle == "2.5Fin")*1
 
 table(house$bldgtype)
 
@@ -337,7 +326,7 @@ cor(house$garagequal, house$garagecars)
 house %<>% select(-garagequal)
 
 fullmodel <- lm(saleprice~.,data = house)
-summary(fullmodel)
+summary(fullmodel)$r.squared
 ```
 
 Checking multicollinearity. Looks good. For the generalized variance inflation factor (normalized by the degree of freedom), everything except one is less than 2. 
@@ -345,7 +334,7 @@ Checking multicollinearity. Looks good. For the generalized variance inflation f
 vif(fullmodel)
 ```
 
-
+Getting all of the numeric variables.
 ```{r, fig.width = 12, fig.height = 11}
 house$remodel <- as.numeric(house$remodel)
 
@@ -361,20 +350,19 @@ cor_matrix <- cor(house_numeric)
 ggcorrplot(cor_matrix, type = "lower", outline.col = "white",
            lab = T, insig = "blank")
 
-
-
 ```
 
 Interestingly, `soldminusbuilt` which is `yrsold` - `yearbuilt` becomes insignificant in this smaller model with only the best predictors
 ```{r}
-bestpredictors <- names(house_numeric)[sapply(house_numeric, function(x) abs(cor(house_numeric$saleprice, x))) >= 0.5][-1]
+bestpredictors <- names(house_numeric)[sapply(house_numeric, 
+function(x) abs(cor(house_numeric$saleprice, x))) >= 0.5][-1]
 
 bestpredictors <- bestpredictors[-6]
 
-bestmodel <- lm(saleprice~overallqual + exterqual + grlivarea + kitchenqual +
-     garagecars + pricecategory, data = house)
+bestmodel <- lm(saleprice~overallqual + exterqual + grlivarea + 
+    kitchenqual + garagecars + pricecategory, data = house)
 
-summary(bestmodel)
+summary(bestmodel)$r.squared
 ```
 
 Subset with only best predictors
@@ -389,36 +377,18 @@ Checking assumptions.
 ```{r}
 cor(housesubset)
 vif(bestmodel)
-qqnorm(housesubset$overallqual)
-qqline(housesubset$overallqual)
 
-qqnorm(housesubset$exterqual)
-qqline(housesubset$exterqual)
+par(mfrow=c(2,4))
+qqnorm(housesubset$grlivarea); qqline(housesubset$grlivarea)
+qqnorm(log(housesubset$grlivarea)); qqline(log(housesubset$grlivarea))
 
-qqnorm(housesubset$grlivarea)
-qqline(housesubset$grlivarea)
-
-
-qqnorm(log(housesubset$grlivarea))
-qqline(log(housesubset$grlivarea))
-
-qqnorm(housesubset$garagecars)
-qqline(housesubset$garagecars)
-
-qqnorm(housesubset$pricecategory)
-qqline(housesubset$pricecategory)
-
-qqnorm(house$saleprice)
-qqline(house$saleprice)
-
-qqnorm(log(house$saleprice))
-qqline(log(house$saleprice))
+qqnorm(house$saleprice); qqline(house$saleprice)
+qqnorm(log(house$saleprice)); qqline(log(house$saleprice))
 ```
 
 ```{r}
 bestmodel2 <- lm(log(saleprice)~overallqual  + exterqual +  log(grlivarea) + 
     kitchenqual + garagecars + pricecategory, data = house)
-
 summary(bestmodel2)
 ```
 
@@ -426,8 +396,7 @@ summary(bestmodel2)
 ```{r}
 bestmodel3 <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
     kitchenqual + garagecars + pricecategory, data = house)
-summary(bestmodel3)
-
+summary(bestmodel3)$r.squared
 ```
 
 Check for influence points
@@ -435,15 +404,11 @@ Check for influence points
 infm <- influence.measures(bestmodel3)
 which(apply(infm$is.inf,1,any)) #influential observations
 summary(infm)
+
 plot(rstudent(bestmodel3) ~ hatvalues(bestmodel3))
 #install.packages("olsrr")
-```
-```{r}
-library(olsrr)
-threshold <- 2*sqrt(5/1460)
-ols_dffits_plot(bestmodel3)
-
-help("ols_dffits_plot")
+suppressMessages(library(olsrr))
+influence <- ols_dffits_plot(bestmodel3)
 ```
 
 Let's examine Observation # 1299, and 524
@@ -454,7 +419,7 @@ house[542,] %>% View()
 
 bestmodel4 <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
     kitchenqual + garagecars + pricecategory, data = house[c(-1299,-542),])
-summary(bestmodel4)
+summary(bestmodel4)$r.squared
 
 ```
 
@@ -462,12 +427,12 @@ By just removing two points, our Adjusted R-squared went from `r summary(bestmod
 
 Let's see what happens if we simply remove the observations.
 ```{r}
-influence <- ols_dffits_plot(bestmodel3)
+
 influenceindex <- unlist(influence$outliers[1])
 
 bestmodelnoinfluence <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
     kitchenqual + garagecars + pricecategory, data = house[-influenceindex,])
-summary(bestmodelnoinfluence)
+summary(bestmodelnoinfluence)$r.squared
 
 ```
 
@@ -476,33 +441,119 @@ We see that our Adjusted R-squared went from `r summary(bestmodel4)$adj.r.square
 
 
 ```{r}
-house[influenceindex, ]$saleprice <- NA
-house$saleprice <- kNN(house, variable = "saleprice",  k = k)$saleprice
+house2 <- house
+house2[influenceindex, ]$saleprice <- NA
+house2$saleprice <- kNN(house2, variable = "saleprice",  k = k)$saleprice
 ```
 
 ```{r}
 bestmodelimputeinfluence <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
-    kitchenqual + garagecars + pricecategory, data = house)
-summary(bestmodelimputeinfluence)
+    kitchenqual + garagecars + pricecategory, data = house2)
+summary(bestmodelimputeinfluence)$r.squared
 ```
 
+Let's try our model with all of the relevant variables. First, we notice that the R squared improves by taking the log of `saleprice`, `lotarea`, `grlivarea` and the square root of `bsmtfinsf1`. We also notice that `housestyle` and `masvnrtype` is no longer significant so we remove them.
+```{r}
+house %<>% select(-housestyle,-masvnrtype)
+model31var <- lm(log(saleprice) ~ log(lotarea) + 
+                   sqrt(bsmtfinsf1)+log(grlivarea)+., data = house)
+summary(model31var)$r.squared
+```
 
-Check MSPE
+Accounting for outliers in the full model through imputation
 
 ```{r}
-set.seed(888)
-train <- sample(nrow(house), nrow(house) * .8)
-test <- (-train)
-
-trainhouse <- house[train,]
-testhouse <- house[test,]
-
-trainmodel <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
-    kitchenqual + garagecars + pricecategory, data = trainhouse)
-exp(predict(trainmodel, testhouse)) - testhouse$saleprice
+model31varimpute <- lm(log(saleprice) ~ log(lotarea) + 
+              sqrt(bsmtfinsf1)+log(grlivarea)+., data = house2)
+summary(model31varimpute)$r.squared
 ```
 
+We can try removing the outliers, which improved the R squared by a lot. Now, we can test some interaction terms.
 
+```{r}
+model31varremove <- lm(log(saleprice) ~ log(lotarea) + 
+              sqrt(bsmtfinsf1)+log(grlivarea)+., data = house2[-influenceindex,])
+summary(model31varremove)$r.squared
+```
+
+I remove some variables found to be insignificant.
+```{r}
+house3 <- house2 %>% select(-condition2,-roofmatl,-garagetype,-poolarea,-remodel)
+```
+
+I look back at the correlation plot generated earlier and tested random interaction terms. I found the interaction of `overallqual` and `grlivarea` to be significant.
+
+```{r}
+modelinteraction <- lm(log(saleprice) ~ log(lotarea) + 
+              sqrt(bsmtfinsf1)+log(grlivarea) +. -
+                lotarea - bsmtfinsf1 - grlivarea +
+                  overallqual:pricecategory,
+              data = house3[-influenceindex,])
+summary(modelinteraction)$r.squared
+```
+
+```{r}
+vif(modelinteraction)
+```
+
+Reduce the multicollinearity due to interaction terms by standardizing the variables.
+
+Remove `exterqual` `masvrtype` and `masvrarea`
+```{r}
+house4 <- house3 %>% select(-exterqual,-masvnrarea, -masvnrtype)
+```
+
+#FINAL MODEL
+I test the multicollinearity, significance of variables in the model, normality for our final model.
+```{r}
+house4$overallqual <- scale(house4$overallqual)
+house4$pricecategory <- scale(house4$pricecategory)
+
+
+scalemodel <- lm(log(saleprice) ~ log(lotarea) + 
+              sqrt(bsmtfinsf1)+log(grlivarea) + . -
+                lotarea - bsmtfinsf1 - grlivarea +
+                  overallqual:pricecategory,
+              data = house4[-influenceindex,])
+vif(scalemodel)
+options(max.print=999)
+summary(scalemodel)
+ks.test(scalemodel$residuals, pnorm, mean(scalemodel$residuals),
+        sd(scalemodel$residuals))
+qqnorm(scalemodel$residuals); qqline(scalemodel$residuals)
+```
+
+Our final model includes the following variables:
+
+```{r}
+names(house4)
+```
+
+```{r}
+signif_var <- house4 %>% sapply(function(x) cor(house4$saleprice, x))
+signif_var[signif_var >= 0.5]
+```
+#*TASK 1*
+The five most relevant features that are most relevant in determining a house's sale price are `overallqual`, `grlivarea`, `kitchenqual`, `garagecars`, and `pricecategory`. Note that `pricecategory` are the quantiles of neighborhood by how expensive it is and goes from 1 - 10. 
+
+#*TASK 2*
+```{r}
+morty <- read_csv("Morty.txt", col_types = cols())
+```
+
+#*Function to transform TEST DATA accordingly. Please run the function transform()*
+
+```{r}
+transform <- function(df){
+  names(morty) <- tolower(names(morty))
+  morty$soldminusbuilt <- (morty$yrsold - morty$yearbuilt)
+  
+  setdiff(names(morty), names(house4))
+  
+  return(morty)
+}
+transform(morty)
+```
 
 
 
