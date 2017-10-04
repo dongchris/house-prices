@@ -77,22 +77,6 @@ table(house$lotshape)
 house$lotshape <- (house$lotshape == 'Reg') *1
 ```
 
-Change `neighborhood` by seperating it into 10 quantiles by median `saleprice`.
-Combine the new variable `pricecategory` with the original data frame.
-```{r}
-house_by_neighborhood <- house %>% group_by(neighborhood) %>%
-summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
-
-house_by_neighborhood %>% head(2)
-
-house_by_neighborhood$pricecategory <- as.numeric(factor(cut2(house_by_neighborhood$avgprc, quantile(house_by_neighborhood$avgprc)), labels = 1:4))
-
-house_by_neighborhood <- house_by_neighborhood[,-2]
-
-house %<>% left_join(house_by_neighborhood, 
-  by = "neighborhood") %>% select(-neighborhood)
-```
-
 Looking at the histogram of `mosold` we see many more houses being sold near summer time (and part of spring too) so we create a boolean. Most of the time, when we are creating a boolean, it is because it is insignificant otherwise.
 ```{r}
 house %>% ggplot(aes(x=mosold)) + geom_histogram(binwidth = 1) + xlim(0,13)
@@ -360,7 +344,7 @@ function(x) abs(cor(house_numeric$saleprice, x))) >= 0.5][-1]
 bestpredictors <- bestpredictors[-6]
 
 bestmodel <- lm(saleprice~overallqual + exterqual + grlivarea + 
-    kitchenqual + garagecars + pricecategory, data = house)
+    kitchenqual + garagecars + neighborhood, data = house)
 
 summary(bestmodel)$r.squared
 ```
@@ -370,7 +354,7 @@ Subset with only best predictors
 housesubset <- house %>% select(bestpredictors)
 ```
 
-So, 6 variables capture $78\%$ of the variation in sale price for our model.
+So, 6 variables capture `r summary(bestmodel)$r.squared` of the variation in sale price for our model.
 
 Checking assumptions.
 
@@ -388,14 +372,14 @@ qqnorm(log(house$saleprice)); qqline(log(house$saleprice))
 
 ```{r}
 bestmodel2 <- lm(log(saleprice)~overallqual  + exterqual +  log(grlivarea) + 
-    kitchenqual + garagecars + pricecategory, data = house)
+    kitchenqual + garagecars + neighborhood, data = house)
 summary(bestmodel2)
 ```
 
 `exterqual` becomes insignificant once we take the log of the response variable
 ```{r}
 bestmodel3 <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
-    kitchenqual + garagecars + pricecategory, data = house)
+    kitchenqual + garagecars + neighborhood, data = house)
 summary(bestmodel3)$r.squared
 ```
 
@@ -418,7 +402,7 @@ house[1299,] %>% View()
 house[542,] %>% View()
 
 bestmodel4 <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
-    kitchenqual + garagecars + pricecategory, data = house[c(-1299,-542),])
+    kitchenqual + garagecars + neighborhood, data = house[c(-1299,-542),])
 summary(bestmodel4)$r.squared
 
 ```
@@ -431,7 +415,7 @@ Let's see what happens if we simply remove the observations.
 influenceindex <- unlist(influence$outliers[1])
 
 bestmodelnoinfluence <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
-    kitchenqual + garagecars + pricecategory, data = house[-influenceindex,])
+    kitchenqual + garagecars + neighborhood, data = house[-influenceindex,])
 summary(bestmodelnoinfluence)$r.squared
 
 ```
@@ -448,7 +432,7 @@ house2$saleprice <- kNN(house2, variable = "saleprice",  k = k)$saleprice
 
 ```{r}
 bestmodelimputeinfluence <- lm(log(saleprice)~overallqual  +  log(grlivarea) + 
-    kitchenqual + garagecars + pricecategory, data = house2)
+    kitchenqual + garagecars + neighborhood, data = house2)
 summary(bestmodelimputeinfluence)$r.squared
 ```
 
@@ -486,8 +470,7 @@ I look back at the correlation plot generated earlier and tested random interact
 ```{r}
 modelinteraction <- lm(log(saleprice) ~ log(lotarea) + 
               sqrt(bsmtfinsf1)+log(grlivarea) +. -
-                lotarea - bsmtfinsf1 - grlivarea +
-                  overallqual:pricecategory,
+                lotarea - bsmtfinsf1 - grlivarea, 
               data = house3[-influenceindex,])
 summary(modelinteraction)$r.squared
 ```
@@ -498,29 +481,25 @@ vif(modelinteraction)
 
 Reduce the multicollinearity due to interaction terms by standardizing the variables.
 
-Remove `exterqual` `masvrtype` and `masvrarea`
+Remove `exterqual`
 ```{r}
-house4 <- house3 %>% select(-exterqual,-masvnrarea, -masvnrtype)
+house4 <- house3 %>% select(-exterqual)
 ```
 
 #FINAL MODEL
 I test the multicollinearity, significance of variables in the model, normality for our final model.
 ```{r}
-house4$overallqual <- scale(house4$overallqual)
-house4$pricecategory <- scale(house4$pricecategory)
-
-
-scalemodel <- lm(log(saleprice) ~ log(lotarea) + 
-              sqrt(bsmtfinsf1)+log(grlivarea) + . -
-                lotarea - bsmtfinsf1 - grlivarea +
-                  overallqual:pricecategory,
+endmodel <- lm(log(saleprice) ~ log(lotarea) + 
+              sqrt(bsmtfinsf1)+log(grlivarea) + 
+                sqrt(soldminusbuilt)+ . -
+                lotarea - bsmtfinsf1 - grlivarea - soldminusbuilt,
               data = house4[-influenceindex,])
-vif(scalemodel)
+vif(endmodel)
 options(max.print=999)
-summary(scalemodel)
-ks.test(scalemodel$residuals, pnorm, mean(scalemodel$residuals),
-        sd(scalemodel$residuals))
-qqnorm(scalemodel$residuals); qqline(scalemodel$residuals)
+summary(endmodel)
+ks.test(endmodel$residuals, pnorm, mean(endmodel$residuals),
+        sd(endmodel$residuals))
+qqnorm(endmodel$residuals); qqline(endmodel$residuals)
 ```
 
 Our final model includes the following variables:
@@ -530,11 +509,13 @@ names(house4)
 ```
 
 ```{r}
-signif_var <- house4 %>% sapply(function(x) cor(house4$saleprice, x))
+signif_var <- house4 %>% select(-neighborhood) %>% 
+  sapply(function(x) abs(cor(house4$saleprice, x)))
 signif_var[signif_var >= 0.5]
 ```
 #*TASK 1*
-The five most relevant features that are most relevant in determining a house's sale price are `overallqual`, `grlivarea`, `kitchenqual`, `garagecars`, and `pricecategory`. Note that `pricecategory` are the quantiles of neighborhood by how expensive it is and goes from 1 - 10. 
+The five most relevant features that are most relevant in determining a house's sale price are `overallqual`, `grlivarea`, `kitchenqual`, `garagecars`, and
+`soldminusbuilt`. The fifth variable, `soldminusbuilt` is equal to `yearsold` - `yearbuilt`.
 
 #*TASK 2*
 ```{r}
@@ -547,8 +528,14 @@ morty <- read_csv("Morty.txt", col_types = cols())
 transform <- function(df){
   names(morty) <- tolower(names(morty))
   morty$soldminusbuilt <- (morty$yrsold - morty$yearbuilt)
+  morty$summertime <- (morty$mosold %in% 5:7) * 1
+  morty$newtype <- (morty$saletype == 'New') * 1
   
-  setdiff(names(morty), names(house4))
+  morty %<>% select(intersect(names(morty), names(house4)))
+  
+  morty$condition1 <- (morty$condition1 == "Artery" | 
+      morty$condition1 =="Feedr"| morty$condition1 == "RRAe")*1
+  
   
   return(morty)
 }
