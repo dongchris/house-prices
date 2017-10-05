@@ -142,7 +142,7 @@ We perform a method that is similar to backwards selection (though manually). We
 \item If the variable is numeric and significant, keep it. If the variable is categorical and all levels are significant, keep it. If only some levels are significant then try to bin the factors into smaller number of levels to try and make them statistically significant. If nothing can be done, then remove the variable.
 \item Repeat steps 1 through 4 for the rest of the variables. Each time we remove a variable, we re-run the lm model to check if the Adjusted R Squared changed significantly or not. If it decreased, we may add the variable back.
 \item When we finish going through all the variables, there will be about 30 ones left to consider.
-\item Stop when every single variable becomes statistically signifcant under an $\alpha$ level of 0.05. Confirm results variable selection via LASSO.
+\item Stop when every single variable becomes statistically signifcant under an $\alpha$ level of 0.05. Confirm results with variable selection via LASSO.
 \end{enumerate}
 
 \subsection{Notes}
