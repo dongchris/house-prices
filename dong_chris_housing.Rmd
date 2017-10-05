@@ -20,6 +20,7 @@ suppressMessages(library(leaps))
 suppressMessages(library(VIM))
 suppressMessages(library(car))
 suppressMessages(library(Hmisc))
+suppressMessages(library(glmnet))
 house <- read_csv("housing.txt", col_types = cols())
 names(house) <- tolower(names(house))
 ```
@@ -501,7 +502,34 @@ ks.test(endmodel$residuals, pnorm, mean(endmodel$residuals),
 qqnorm(endmodel$residuals); qqline(endmodel$residuals)
 ```
 
-Our final model includes the following variables:
+Checking with LASSO if any variables to remove. Although LASSO recommends to delete `bsmtunsf` and `bedroomabvgr`, removing them lowers the R squared so I will keep them. Many of the neighborhoods are in fact significant so I will leave the non-significant levels in the model anyway.
+```{r}
+lassorefactor <- function(){
+  
+ x <- model.matrix(saleprice ~ ., data = house4)[,-1]
+ y <- house$saleprice
+ train <- sample(1:nrow(x), nrow(x) / 2)
+ test <- (-train)
+ y.train <- y[train]
+ y.test <- y[test]
+ grid.lambda <- 10^seq(10, -2, length = 100)
+ lasso.model <- glmnet(x, y, alpha = 1, lambda = grid.lambda)
+ set.seed(1)
+ cv.out <- cv.glmnet(x[train,], y.train, alpha = 1)
+ best.lambda <- cv.out$lambda.min
+ lasso.pred <- predict(lasso.model, s = best.lambda, newx = x[test,])
+ mspe.lasso <- mean((lasso.pred - y.test)^2)
+ final.model <- glmnet(x, y, alpha = 1, lambda = best.lambda)
+ c <- coef(final.model)
+ ind <- which(c==0)
+ variables <- row.names(c)[ind]
+ return(variables)
+}
+
+lassorefactor()
+```
+
+Thus, our final model includes the following variables:
 
 ```{r}
 names(house4)
