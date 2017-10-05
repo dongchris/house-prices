@@ -33,10 +33,9 @@ house %>% sapply(function(x) sum(is.na(x))) %>% sort(decreasing = T)
 
 Convert numeric variables that have `NA` to 0. Change `garageyrblt` to indicate whether or not the garage was built AFTER the house was built.
 ```{r}
+house$masvnrarea[which(is.na(house$masvnrarea))] <- 0
 house$bsmtfintype1[which(is.na(house$bsmtfintype1))] <- 0
 house$bsmtfintype2[which(is.na(house$bsmtfintype2))] <- 0
-house$masvnrarea <- as.numeric(house$masvnrarea)
-house$masvnrarea[which(is.na(house$masvnrarea))] <- 0
 house$garageyrblt <- (house$garageyrblt > house$yearbuilt) * 1
 house$garageyrblt[is.na(house$garageyrblt)] <- 0
 ```
@@ -101,7 +100,7 @@ house$lotconfig <- (house$lotconfig == "Inside")  * 1
 house %<>% select(-lotconfig)
 ```
 
-Here, I noticed `lotfrontage` became significant when I take the square root.
+Here, we noticed `lotfrontage` became significant when we take the square root. We remove `1stflrsf`, `2ndflrsf`, `lowqualfinsf` because they make up the variable `grlivarea`. At first, we tried having all three of them and deleting `grlivarea` however we found that having just `grlivarea` performed better. We are deleting the porch variables because we have already aggregated them into `porcharea`.
 ```{r}
 fullmodel <- lm(saleprice~sqrt(lotfrontage)+porcharea+.,data = house)
 summary(fullmodel)$r.squared
@@ -205,6 +204,7 @@ house$bsmtfintype2 <- as.numeric(factor(house$bsmtfintype2,
       labels = 0:6))
 house$bsmtfintype1 <- house$bsmtfintype1 + house$bsmtfintype2
 house %<>% select(-bsmtfintype1, -bsmtfintype2)
+
 
 house$bsmtexposure <- relevel(factor(house$bsmtexposure), ref = "None")
 
@@ -311,7 +311,7 @@ cor(house$garagequal, house$garagecars)
 house %<>% select(-garagequal)
 
 fullmodel <- lm(saleprice~.,data = house)
-summary(fullmodel)$r.squared
+summary(fullmodel)
 ```
 
 Checking multicollinearity. Looks good. For the generalized variance inflation factor (normalized by the degree of freedom), everything except one is less than 2. 
@@ -439,7 +439,6 @@ summary(bestmodelimputeinfluence)$r.squared
 
 Let's try our model with all of the relevant variables. First, we notice that the R squared improves by taking the log of `saleprice`, `lotarea`, `grlivarea` and the square root of `bsmtfinsf1`. We also notice that `housestyle` and `masvnrtype` is no longer significant so we remove them.
 ```{r}
-house %<>% select(-housestyle,-masvnrtype)
 model31var <- lm(log(saleprice) ~ log(lotarea) + 
                    sqrt(bsmtfinsf1)+log(grlivarea)+., data = house)
 summary(model31var)$r.squared
@@ -465,22 +464,6 @@ I remove some variables found to be insignificant.
 ```{r}
 house3 <- house2 %>% select(-condition2,-roofmatl,-garagetype,-poolarea,-remodel)
 ```
-
-I look back at the correlation plot generated earlier and tested random interaction terms. I found the interaction of `overallqual` and `grlivarea` to be significant.
-
-```{r}
-modelinteraction <- lm(log(saleprice) ~ log(lotarea) + 
-              sqrt(bsmtfinsf1)+log(grlivarea) +. -
-                lotarea - bsmtfinsf1 - grlivarea, 
-              data = house3[-influenceindex,])
-summary(modelinteraction)$r.squared
-```
-
-```{r}
-vif(modelinteraction)
-```
-
-Reduce the multicollinearity due to interaction terms by standardizing the variables.
 
 Remove `exterqual`
 ```{r}
@@ -546,28 +529,79 @@ The five most relevant features that are most relevant in determining a house's 
 
 #*TASK 2*
 ```{r}
-morty <- read_csv("Morty.txt", col_types = cols())
+morty<- read_csv("Morty.txt", col_types = cols())
 ```
 
-#*Function to transform TEST DATA accordingly. Please run the function transform()*
+#*Function to transform TEST DATA accordingly. Please run the function transform() and provide the data frame to the argument*
 
 ```{r}
 transform <- function(df){
-  names(morty) <- tolower(names(morty))
-  morty$soldminusbuilt <- (morty$yrsold - morty$yearbuilt)
-  morty$summertime <- (morty$mosold %in% 5:7) * 1
-  morty$newtype <- (morty$saletype == 'New') * 1
+  names(df) <- tolower(names(df))
+
+  df[is.na(df)] <- "None"
+  df$soldminusbuilt <- (df$yrsold - df$yearbuilt)
+  df$summertime <- (df$mosold %in% 5:7) * 1
+  df$newtype <- (df$saletype == 'New') * 1
   
-  morty %<>% select(intersect(names(morty), names(house4)))
+  df %<>% select(intersect(names(df), names(house4)))
   
-  morty$condition1 <- (morty$condition1 == "Artery" | 
-      morty$condition1 =="Feedr"| morty$condition1 == "RRAe")*1
+  df$condition1 <- (df$condition1 == "Artery" | 
+      df$condition1 =="Feedr"| df$condition1 == "RRAe")*1
   
+  df$housestyle <- (df$housestyle == "2Story" | 
+                    df$housestyle == "2.5Fin")*1
+
+  df$masvnrtype <- (df$masvnrtype != "None") * 1
+  df$bsmtexposure <- (df$bsmtexposure == "Gd") * 1
   
-  return(morty)
+  df$heatingqc <- as.numeric(factor(df$heatingqc,
+  levels = c("Po","Fa","TA","Gd","Ex"), labels = 1:5))
+  
+  df$kitchenqual <-  as.numeric(factor(df$kitchenqual,
+    levels = c("Po","Fa","TA","Gd","Ex"), labels = 1:5))
+  
+  df$functional <- (df$functional == "Typ") * 1
+  df$salecondition <- (df$salecondition == "Normal") * 1 
+  return(df)
 }
-transform(morty)
+morty2 <- transform(morty)
+```
+
+`morty2` is our transformed data. Note that it only has 25 variables
+```{r}
+exp(predict(endmodel, morty2, interval = "confidence", level = 0.95)) %>% knitr::kable()
+```
+
+```{r}
+morty_stat <- as.numeric(unlist(morty2))
+names(morty_stat) <- names(morty2)
+mean_stat <- sapply(house4, function(x) round(mean(x)))
+
+index <- which(morty2!=mean_stat)
+morty_stat[index]
+mean_stat[index]
+
+improve <- house4[index] %>% select(-saleprice, -soldminusbuilt) %>% 
+  sapply(function(x) abs(cor(x, house4$saleprice))) %>% sort(decreasing = T)
+```
+
+```{r}
+improve
+
+for(i in 1:length(morty_stat)){
+  print(i)
+}
+
 ```
 
 
+
+
+```{r}
+set.seed(1)
+train <- sample(nrow(house)*.8)
+test <- (-train)
+
+
+```
 
