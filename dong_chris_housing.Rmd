@@ -795,7 +795,7 @@ help(cv.glmnet)
 
 **Justification**
 
-Our ridge model performed the best and has the lowest MSPE. This makes sense, given that our data is very sparse, containing many zeros.
+Our ridge model performed the best and has the lowest MSPE. 
 
 ```{r}
 countzero <- function(x){

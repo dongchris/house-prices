@@ -207,7 +207,6 @@ When computing the VIF, we remove the categorical variable neighborhood.
 
 As for now, we have 30 significant variables, 6 of them has a correlation with sale price that is greater than 0.5. We wish to check the normality of numerical variables so that we will have a better understanding what transformation we need or if we need transformation on our variables. In these 6 variables as well as salesprice, only salesprice and grlivarea are continuous. In the below Q-Q plots, the first plots the quantiles of the standardized grlivarea values against those of a normal distribution. It’s obvious that it has two big tails that are not on the line. We decided that a log transformation is necessary for grlivarea. After taking a log transformation on grlivarea, most of points are nicely placed around the line in its Q-Q plot. Salesprice, on the other hand, is not normal distributed, so again we take a log on salesprice. The new plots look good and no longer have a curved shape.
 
-For the other variables, after some experimentation, we also take the log of lotarea and the square root of bsmtfinsf1 in our final model. 
 \end{flushleft}
 \centering
     \vspace*{0.5 cm}
@@ -215,6 +214,10 @@ For the other variables, after some experimentation, we also take the log of lot
 \begin{flushleft}
 
 As a result, the model now has 6 variables and we take log transformation of both response variable and one predictor variable. In this new model, checking p-values, we realized that one of them (exterqual) becomes insignificant. So we further delete this variable and now we have a model with 5 variables.
+
+For the other variables, after some experimentation, we also take the log of lotarea and the square root of bsmtfinsf1 in our final model. 
+
+For clarification, we work with two seperate models. One model contains only the \textit{best} predictors (correlation greater than 0.5). After transforming more variables, we found 5 variables from the full model to no longer be significant. The \textit{full} model contains statistically significant variables and ends up to be 23 variables, with one of them as categorical (Neighborhood). 
 \end{flushleft}
 \section{Normality and Homoscedascity}
 \begin{flushleft}
@@ -297,7 +300,7 @@ We begin our valuation of Morty's house by only selecting the 25 variables that 
     \includegraphics[scale = 0.5]{cor.png}\\[1.0 cm]	
     
 \begin{flushleft}
-overallqual and kitchenqual are in the top 3 for correlation with saleprice. grlivarea is difficult/nearly impossible to improve so we will move on to the next variable. 
+overallqual and kitchenqual are in the top 3 for correlation with saleprice. grlivarea is difficult/nearly impossible to improve so we will move on to the next variable. Note that I removed variables like soldminusbuilt and neighborhood because they are variables that are set in stone and cannot change for obvious reasons.
 
 Conclusion: Morty should try to improve the overallqual, which is the overall material and finish of the house. This may mean repainting some areas on the house to make it look nicer. Morty currently has a rating of 5 out 10 (average rating is 6 out of 10) so there is definitely room for improvement. Next, Morty should improve kitchenqual, which is kitchen quality. Maybe, there can be some remodeling done or fixing anything that is either old, or possibly broken. Morty has a rating of 3 out of 5 compared to the average rating of 4 out of 5. Finally, he can increase garagecars. After doing some research, it is possible to extend a garage. Although we removed garagearea since it is correlated with garagecars, both have high correlation with salesprice so Morty can consider to extend his garage -- it may be worth the investment. 
 
@@ -330,7 +333,7 @@ Elastic Net & 1,875,864,966 \\
 \end{tabular}
 \begin{flushleft}
 
-Our ridge model performed the best and has the lowest MSPE. This makes sense, given that our data is very sparse, containing many zeros (masvnrarea, bsmtfinsf, bsmtfinsf2, and bsmtunsf all have many zeros.)
+Our ridge model performed the best and has the lowest MSPE. This makes sense, given that our data is relatively dense, with not much zeros. Ridge regression helped to reduce the variation in our model.
 
 Some variables have more impact than others but nevertheless they are statistically significant in our model so we keep them. Three of these variables are generated from other variables. We created summertime partly because of common sense and after plotting the distribution of houses being sold by month, we saw a peak in the summer months. This makes sense practically because people tend to have more time during the summer and thus are more likely to buy a house. Secondly, we created soldminusbuilt because we felt that the difference between yearsold and yearbuilt is more useful together rather than seperately. The third variable we created is a boolean for saletype to indicate a house that was "just constructed and sold", which from a common sense perspective, can make the house go much higher. Many of the variables are condensed into smaller levels. Many levels have very few observations so we feel they are not significant enough to have their own level. This helps to prevent overfitting when predicting new values. We chose to not have too many variables in our model to also prevent overfitting. We confirmed the validity of our variables through LASSO regression. Lasso didn't really eliminate any variables, which supports the statistical signifiance of our predictors. 
 \end{flushleft}
