@@ -266,7 +266,7 @@ An observation i is an \textbf{outlier} if the residual $e_{i}$ is large. To det
 
 \centering
     \vspace*{0.5 cm}
-    \includegraphics[scale = .5]{outlier.png}\\[1.0 cm]	
+    \includegraphics[scale = .35]{outlier.png}\\[1.0 cm]	
 
 \begin{flushleft}
 
@@ -274,6 +274,19 @@ First, we try by removing points 1299 and 524. We see that the R squared improve
 
 \end{flushleft}
 
+\section{Final Model}
+\begin{flushleft}
+
+log(saleprice) $\sim$ log(lotarea) + sqrt(bsmtfinsf1) + log(grlivarea) + 
+    (lotarea + neighborhood + condition1 + housestyle + overallqual + 
+        overallcond + masvnrtype + masvnrarea + bsmtexposure + 
+        bsmtfinsf1 + bsmtfinsf2 + bsmtunfsf + heatingqc + grlivarea + 
+        bedroomabvgr + kitchenabvgr + kitchenqual + functional + 
+        garagecars + wooddecksf + salecondition + soldminusbuilt) - 
+    lotarea - bsmtfinsf1 - grlivarea
+
+The last three variables are subtracted because we have the transformed ones.
+\end{flushleft}
 \section{Visualizing Correlation}
 
 \centering

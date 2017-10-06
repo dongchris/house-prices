@@ -30,6 +30,10 @@ names(house) <- tolower(names(house))
 house0 <- house
 ```
 
+# Part I: Explanatory Modeling
+
+#TASK 1
+
 **Exploratory Data Analysis**
 ```{r, eval = F}
 p1 <- house %>% ggplot(aes(x=grlivarea, y = saleprice, 
@@ -643,9 +647,7 @@ signif_var <- house4 %>% select(-neighborhood) %>%
 signif_var[signif_var >= 0.5]
 summary(lm(log(saleprice)~log(grlivarea) +kitchenqual +garagecars + soldminusbuilt + overallqual, data = house4))
 ```
-# Part I: Explanatory Modeling
 
-#TASK 1
 The five most relevant features that are most relevant in determining a house's sale price are `overallqual`, `grlivarea`, `kitchenqual`, `garagecars`, and
 `soldminusbuilt`. The fifth variable, `soldminusbuilt` is equal to `yearsold` - `yearbuilt`.
 
