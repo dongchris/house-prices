@@ -333,20 +333,22 @@ For prediction, we will try Ordinary Least Squares, Ridge regression, Lasso regr
 
 \begin{flushleft}
 
-$\lambda$ is chosen to determine whether we are performing Ridge ($\lambda = 0$ ), Lasso ($\lambda = 1$), Elastic Net ($\lambda = 0.5$). The tuning parameters in the respective models is chosen via cross validation after trying 100 different ones. The MSPE for the four models using 80$\%$ of the data for training and 20$\%$ for testing is the following:
+$\lambda$ is chosen to determine whether we are performing Ridge ($\lambda = 0$ ), Lasso ($\lambda = 1$), Elastic Net ($\lambda = 0.5$). The tuning parameter in the respective models is chosen via cross validation after trying 100 different ones. The MSPE for the four models using 80$\%$ of the data for training and 20$\%$ for testing is the following:
 \end{flushleft}
 \centering
 \begin{tabular}{ |c|c|c|c|}
 \hline
-OLS & 10,670,105,697 \\
-Ridge & 1,769,352,685 \\
-Lasso & 1,880,105,933 \\
-Elastic Net & 1,875,864,966 \\
+OLS & 10,678,431,344 \\
+Ridge & 1,359,100,564 \\
+Lasso & 1,660,640,737 \\
+Elastic Net & 1,530,115,619 \\
 \hline
 \end{tabular}
 \begin{flushleft}
 
 Our ridge model performed the best and has the lowest MSPE. This makes sense, given that our data is relatively dense, with not much zeros. Some of the "zeros" in our model are not actually zero --they are booleans that come from categorical variables that previously had 5 factors but were condensed into 2. Ridge regression helped to reduce the variation in our model, making it have the lowest MSPE.
+
+Our variable selection is the same as Explanatory Modeling with the corresponding transformations. We feel that these variables capture most of the variation in the response variable and including any more can lead to overfitting new data.
 
 Some variables have more impact than others but nevertheless they are statistically significant in our model so we keep them. Three of these variables are generated from other variables. We created summertime partly because of common sense and after plotting the distribution of houses being sold by month, we saw a peak in the summer months. This makes sense practically because people tend to have more time during the summer and thus are more likely to buy a house. Secondly, we created soldminusbuilt because we felt that the difference between yearsold and yearbuilt is more useful together rather than seperately. The third variable we created is a boolean for saletype to indicate a house that was "just constructed and sold", which from a common sense perspective, can make the house go much higher. Many of the variables are condensed into smaller levels. Many levels have very few observations so we feel they are not significant enough to have their own level. This helps to prevent overfitting when predicting new values. We chose to not have too many variables in our model to also prevent overfitting. We confirmed the validity of our variables through LASSO regression. Lasso didn't really eliminate any variables, which supports the statistical signifiance of our predictors. 
 \end{flushleft}

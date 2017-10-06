@@ -30,9 +30,9 @@ names(house) <- tolower(names(house))
 house0 <- house
 ```
 
-# Part I: Explanatory Modeling
+# Part I Explanatory Modeling
 
-#TASK 1
+# Task 1
 
 **Exploratory Data Analysis**
 ```{r, eval = F}
@@ -735,22 +735,13 @@ prettyNum(mean((OLS_predict[,1] - housetrain$saleprice)^2), big.mark = ",")
 
 ```
 
-```{r}
-GLS_train <- glm(log(saleprice) ~ log(lotarea) + 
-              sqrt(bsmtfinsf1)+log(grlivarea) +  . -
-                lotarea - bsmtfinsf1 - grlivarea,
-              data = housetrain[-influenceindex,])
-GLS_predict <- exp(predict(OLS_train, housetest, 
-      interval = "prediction", level = 0.95, type = "response"))
-prettyNum(mean((GLS_predict[,1] - housetrain$saleprice)^2), big.mark = ",")
-```
-
 #### Define the function to generate models for ridge, lasso and elastic net
 ```{r}
+f <- formula(endmodel)
 model_func <- function(input_data, input_alpha){
 set.seed(1)
-x <- model.matrix(saleprice ~ ., data = input_data)[,-1]
-y <- house$saleprice
+x <- model.matrix(f, data = input_data)[,-1]
+y <- log(house$saleprice)
 train <- sample(nrow(house)*.8)
 test <- (-train)
 y.train <- y[train]
@@ -761,10 +752,10 @@ set.seed(1)
 cv.out <- cv.glmnet(x[train,], y.train, alpha = input_alpha)
 best.lambda <- cv.out$lambda.min
 pred <- predict(model.train, s = best.lambda, newx = x[test,])
-mspe <- mean((pred - y.test)^2)
+mspe <- mean((exp(pred) - exp(y.test))^2)
 final.model <- glmnet(x, y, alpha = input_alpha, lambda = best.lambda)
 c <- coef(final.model)
-return(c(mspe, final.model))
+return(c(mspe, best.lambda, final.model))
 }
 ```
 
@@ -772,6 +763,7 @@ return(c(mspe, final.model))
 ```{r}
 ridge_result <- model_func(house4,0)
 ridge_mspe <- ridge_result[1]
+ridge_lambda <- unlist(ridge_result[2])
 prettyNum(ridge_mspe, big.mark = ",")
 ```
 
@@ -779,6 +771,7 @@ prettyNum(ridge_mspe, big.mark = ",")
 ```{r}
 lasso_result <- model_func(house4,1)
 lasso_mspe <- lasso_result[1]
+lasso_lambda <- unlist(ridge_result[2])
 prettyNum(lasso_mspe, big.mark = ",")
 ```
 
@@ -787,6 +780,7 @@ prettyNum(lasso_mspe, big.mark = ",")
 ```{r}
 elastic_result <- model_func(house4,0.5)
 elastic_mspe <- elastic_result[1]
+elastic_lambda <- unlist(ridge_result[2])
 prettyNum(elastic_mspe, big.mark = ",")
 ```
 
