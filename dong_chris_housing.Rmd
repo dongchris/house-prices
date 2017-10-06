@@ -543,13 +543,7 @@ model31varimpute <- lm(log(saleprice) ~ log(lotarea) +
 summary(model31varimpute)$r.squared
 ```
 
-We can try removing the outliers, which improved the R squared by a lot. Now, we can test some interaction terms.
-
-```{r}
-model31varremove <- lm(log(saleprice) ~ log(lotarea) + 
-              sqrt(bsmtfinsf1)+log(grlivarea)+., data = house2[-influenceindex,])
-summary(model31varremove)$r.squared
-```
+We can try removing the outliers, which improved the R squared by a lot. 
 
 I remove some variables found to be insignificant.
 ```{r}

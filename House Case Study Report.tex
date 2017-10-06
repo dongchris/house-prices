@@ -119,7 +119,7 @@ Looking at the histogram of mosold we see many more houses being sold near summe
     \includegraphics[scale = 0.75]{plot1.png}
 
 \begin{flushleft}
-We explore relationship between potential predictors with the response variable by plotting and calculating a correlation matrix. Some variables have a strong linear relationship with the sales price. In fact, two of the best predictors of house price -- kitchen quality and above grade (ground) living area square feet. In the top graph, we see that there is a fan-shape, which indicates homoscedasticity. This is why we considered to take the log of both the explanatory and response variable to solve this problem. 
+We explore relationship between potential predictors with the response variable by plotting and calculating a correlation matrix. Some variables have a strong linear relationship with the sales price. In fact, two of the best predictors of house price -- kitchen quality and above grade (ground) living area square feet. In the top graph, we see that there is a fan-shape, which indicates homoscedasticity. This is why we considered to take the log of both the explanatory and response variable to solve this problem in our later transformations.
 
 So, in the bottom plot, we see a fairly linear trend. As kitchen quality improves, the price of the house, on average, will also increase. Many of the houses fall within 3 or 4, which makes sense since it indicates the middle range. Furthermore, although obvious, as the square footage increases, the price of the house will also increase.
 \end{flushleft}
@@ -206,6 +206,8 @@ When computing the VIF, we remove the categorical variable neighborhood.
 \begin{flushleft}
 
 As for now, we have 30 significant variables, 6 of them has a correlation with sale price that is greater than 0.5. We wish to check the normality of numerical variables so that we will have a better understanding what transformation we need or if we need transformation on our variables. In these 6 variables as well as salesprice, only salesprice and grlivarea are continuous. In the below Q-Q plots, the first plots the quantiles of the standardized grlivarea values against those of a normal distribution. It’s obvious that it has two big tails that are not on the line. We decided that a log transformation is necessary for grlivarea. After taking a log transformation on grlivarea, most of points are nicely placed around the line in its Q-Q plot. Salesprice, on the other hand, is not normal distributed, so again we take a log on salesprice. The new plots look good and no longer have a curved shape.
+
+For the other variables, after some experimentation, we also take the log of lotarea and the square root of bsmtfinsf1 in our final model. 
 \end{flushleft}
 \centering
     \vspace*{0.5 cm}
