@@ -130,7 +130,6 @@ The variable lotshape indicates whether or not the general shape of the property
 \begin{flushleft}
 Looking at the histogram of mosold we see many more houses being sold near summer time so we create a boolean. Most of the time, when we are creating a boolean, it is because the individual levels are insignificant otherwise.
 
-
 \centering
 \section{Building the Model}
 
@@ -278,8 +277,12 @@ We begin our valuation of Morty's house by only selecting the 25 variables that 
 \centering
     \vspace*{0.5 cm}
     \includegraphics[scale = 0.5]{confint.png}\\[1.0 cm]	
-\begin{flushleft}
 
+\centering
+    \vspace*{0.5 cm}
+    \includegraphics[scale = 0.5]{cor.png}\\[1.0 cm]	
+    
+\begin{flushleft}
 overallqual and kitchenqual are in the top 3 for correlation with saleprice. grlivarea and garagecars is difficult/nearly impossible to improve so we will move on to the next variable. masvnrarea and heatingqc are fairly close. We see that Morty already has the highest heatingqc possible so masvnrarea should be considered.
 
 Conclusion: Morty should try to improve the overallqual, which is the overall material and finish of the house. This may mean repainting some areas on the house to make it look nicer. Morty currently has a rating of 5 out 10 (average rating is 6 out of 10) so there is definitely room for improvement. Next, Morty should improve kitchenqual, which is kitchen quality. Maybe, there can be some remodeling done or fixing anything that is either old, or possibly broken. Morty has a rating of 3 out of 5 compared to the average rating of 4 out of 5. Finally, he can increase masvnrarea. He currently does not have a masonary veneer so he can consider building one because he might be able to make a profit from it.
@@ -287,9 +290,6 @@ Conclusion: Morty should try to improve the overallqual, which is the overall ma
 \textbf{According to our model, Morty can sell his house for a maximum value of \$ 196833.60. He should consider improving overallqual, kitchenqual, masvnrarea to increase the value of his home before putting it on the market.}
 
 \end{flushleft}
-\centering
-    \vspace*{0.5 cm}
-    \includegraphics[scale = 0.5]{cor.png}\\[1.0 cm]	
 
 
 
