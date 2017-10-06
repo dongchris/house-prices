@@ -1,7 +1,7 @@
 ---
-title: "dong_chris_housing"
-author: "Chris Dong"
-date: "September 20, 2017"
+title: "House Case Study Report"
+author: "Yimei Chen, Chris Dong, Qian Li, Jing Song"
+date: "October 6, 2017"
 output:
   pdf_document: default
   html_document: default
@@ -23,6 +23,8 @@ suppressMessages(library(Hmisc))
 suppressMessages(library(glmnet))
 suppressMessages(library(grid))
 suppressMessages(library(gridExtra))
+suppressMessages(library(ggcorrplot))
+suppressMessages(library(olsrr))
 house <- read_csv("housing.txt", col_types = cols())
 names(house) <- tolower(names(house))
 house0 <- house
@@ -408,7 +410,7 @@ inf_df %>% ggplot(aes(x=index, y=dffits, color = highinf)) + geom_point() +
 
 ```{r}
 #install.packages("olsrr")
-suppressMessages(library(olsrr))
+
 influence <- ols_dffits_plot(bestmodel3)
 ```
 
@@ -773,8 +775,6 @@ house_numeric <- house4[,sapply(house4,function(x) is.numeric(x))]
 
 house_numeric %<>% select(saleprice, everything())
 #install.packages("ggcorrplot")
-
-library(ggcorrplot)
 
 cor_matrix <- cor(house_numeric) 
 
