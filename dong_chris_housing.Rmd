@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Loading the data and any packages
 ```{r, }
-options("max.print"=3)
+options("max.print"=10)
 suppressMessages(library(tidyverse))
 suppressMessages(library(magrittr))
 suppressMessages(library(leaps))
@@ -126,12 +126,11 @@ house <- house %>% select(-`1stflrsf`, -`2ndflrsf`, -lowqualfinsf,
     -totalbsmtsf, -openporchsf, -enclosedporch, - `3ssnporch`,
     - screenporch, -garagearea)
 
-house %>% group_by(salecondition) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
+table(house$salecondition)
 house$salecondition <- (house$salecondition == "Normal") * 1 
 
-house %>% group_by(saletype) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
-
-house$newtype <- (house$saletype == 'New') * 1
+table(house$saletype)
+house$saletype <- (house$saletype == 'New') * 1
 house <- house %>% select(-saletype)
 
 house$miscfeature <- (house$miscfeature != 'None') * 1
@@ -270,8 +269,6 @@ house$housestyle <- (house$housestyle == "2Story" |
                     house$housestyle == "2.5Fin")*1
 
 table(house$bldgtype)
-
-house %>%  group_by(bldgtype) %>% summarise(avgprc = median(saleprice)) %>% arrange(desc(avgprc))
 
 house$bldgtype <- (house$bldgtype == "1Fam" | house$bldgtype == "2FmCon") * 1
 house %<>% select(-bldgtype)
@@ -516,6 +513,8 @@ summary(endmodel)
 ks.test(endmodel$residuals, pnorm, mean(endmodel$residuals),
         sd(endmodel$residuals))
 
+ncvTest(endmodel)
+
 resid_df <- data_frame(res = endmodel$residuals)
 
 r1 <- ggplot(endmodel, aes(.fitted, .resid)) + geom_point() + xlab("Fitted Values") + ylab("Residuals")+
@@ -569,16 +568,16 @@ summary(lm(log(saleprice)~log(grlivarea) +kitchenqual +garagecars + soldminusbui
 ```
 # Part I: Explanatory Modeling
 
-#*TASK 1*
+#TASK 1
 The five most relevant features that are most relevant in determining a house's sale price are `overallqual`, `grlivarea`, `kitchenqual`, `garagecars`, and
 `soldminusbuilt`. The fifth variable, `soldminusbuilt` is equal to `yearsold` - `yearbuilt`.
 
-#*TASK 2*
+#TASK 2
 ```{r}
 morty<- read_csv("Morty.txt", col_types = cols())
 ```
 
-#*Function to transform TEST DATA accordingly. Please run the function transform() and provide the data frame to the argument*
+##Function to transform TEST DATA accordingly. Please run the function transform() and provide the data frame to the argument
 
 ```{r}
 transform <- function(df){
@@ -587,7 +586,7 @@ transform <- function(df){
   df[is.na(df)] <- "None"
   df$soldminusbuilt <- (df$yrsold - df$yearbuilt)
   df$summertime <- (df$mosold %in% 5:7) * 1
-  df$newtype <- (df$saletype == 'New') * 1
+  df$saletype <- (df$saletype == 'New') * 1
   
   df %<>% select(intersect(names(df), names(house4)))
   
